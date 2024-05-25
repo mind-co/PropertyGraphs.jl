@@ -559,7 +559,7 @@ function update_edge_references(g::PropertyGraph)
         out_edges = Edge[]
         for e in edges(g)
             if e.source == n.id
-                push!(in_edges, e)push!
+                push!(in_edges, e)
             end
             if e.target == n.id
                 push!(out_edges, e)

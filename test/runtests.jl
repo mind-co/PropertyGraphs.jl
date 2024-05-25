@@ -160,13 +160,13 @@ end
             graph = PropertyGraph(Node[john, jane], Edge[john_jane, jane_john, husband, wife])
 
             # Match all friend edges
-            match(graph, EdgePattern("friend of")) == PropertyGraph(Node[], Edge[john_jane, jane_john])
+            @test match(graph, EdgePattern("friend of")) == PropertyGraph(Node[], Edge[john_jane, jane_john])
 
             # Match all edges from John
-            match(graph, EdgePattern(1)) == PropertyGraph(Node[], Edge[john_jane, husband])
+            @test match(graph, EdgePattern(1)) == PropertyGraph(Node[], Edge[john_jane, husband])
 
             # Match edges between john and jane
-            match(
+            @test match(
                 graph,
                 NodePattern("person", "human"; name="John Doe", age=25),
                 EdgePattern(1, 2),
