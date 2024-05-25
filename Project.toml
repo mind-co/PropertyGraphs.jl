@@ -1,0 +1,12 @@
+name = "PropertyGraphs"
+uuid = "8e776571-0c84-4d8d-842c-0d284f11a20a"
+authors = ["Cameron Pfiffer <cameron@pfiffer.org>"]
+version = "0.1.0"
+
+[deps]
+BSON = "fbb218c0-5317-5bc6-957e-2ee96dd4b1f0"
+EasyConfig = "acab07b0-f158-46d4-8913-50acef6d41fe"
+Graphs = "86223c79-3864-5bf0-83f7-82e725a168b6"
+JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
+PromptingTools = "670122d1-24a8-4d70-bfce-740807c42192"
+Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
