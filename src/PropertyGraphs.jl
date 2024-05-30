@@ -10,10 +10,11 @@ using EasyConfig
 export Node, Edge
 export NodePattern, EdgePattern
 export ID, NoID, toid, value
-export EdgeReference, PropertyGraph, match, update_edge_references
+export PropertyGraph, match, remap_id
 export edges, nodes, metadata, valid_id
-export labels, properties, edge_references, id
+export labels, properties, id
 export pretty_print
+export source, target, type, properties
 
 abstract type AbstractPattern end
 abstract type AbstractNodeLike <: AbstractPattern end
@@ -87,19 +88,19 @@ Convert an integer or `UInt` to an `ID`.
 """
 
 """
-    Edge(source::UInt, target::UInt, type::String, properties::Config)
+    Edge(source::UInt, target::UInt, type::AbstractString, properties::Config)
 
 Represents an edge in the property graph.
 
 # Fields
 - `source::UInt`: The unique identifier of the source node.
 - `target::UInt`: The unique identifier of the target node. 
-- `type::String`: The type or label of the edge.
+- `type::AbstractString`: The type or label of the edge.
 - `properties::Config`: A `Config` object representing the properties (key-value pairs) associated with the edge.
 
 # Constructors 
-- `Edge(src::Integer, tgt::Integer, type::String; props...)`: Convenience constructor to create an `Edge` with the given `src` and `tgt` node IDs (converted to `UInt`), `type`, and optional `props` which are passed to the `Config` constructor.
-- `Edge(src::UInt, tgt::UInt, type::String; props...)`: Convenience constructor to create an `Edge` with the given `src` and `tgt` node IDs, `type`, and optional `props` which are passed to the `Config` constructor.
+- `Edge(src::Integer, tgt::Integer, type::AbstractString; props...)`: Convenience constructor to create an `Edge` with the given `src` and `tgt` node IDs (converted to `UInt`), `type`, and optional `props` which are passed to the `Config` constructor.
+- `Edge(src::UInt, tgt::UInt, type::AbstractString; props...)`: Convenience constructor to create an `Edge` with the given `src` and `tgt` node IDs, `type`, and optional `props` which are passed to the `Config` constructor.
 
 # Examples
 ```julia
@@ -109,13 +110,13 @@ Edge(1, 2, "friend"; since=2010)
 struct Edge <: AbstractEdgeLike
     source::ID
     target::ID
-    type::String
+    type::AbstractString
     properties::Config
 
     Edge(s, t, type, props) = new(toid(s), toid(t), type, props)
 end
 
-function Edge(src::CASTABLE_TO_ID, tgt::CASTABLE_TO_ID, type::String; props...)
+function Edge(src::CASTABLE_TO_ID, tgt::CASTABLE_TO_ID, type::AbstractString; props...)
     return Edge(toid(src), toid(tgt), type, Config(props))
 end
 
@@ -130,8 +131,8 @@ function Base.show(io::IO, e::Edge)
     print(io, "$(source(e))-[$(type(e))]->$(target(e)), $(properties(e))")
 end
 
-Base.getindex(e::Edge, key::String) = getindex(e.properties, key)
-function Base.setindex!(e::Edge, value, key::String)
+Base.getindex(e::Edge, key::AbstractString) = getindex(e.properties, key)
+function Base.setindex!(e::Edge, value, key::AbstractString)
     setindex!(e.properties, value, key)
 end
 
@@ -160,7 +161,7 @@ end
 function EdgePattern(e::Edge)
     EdgePattern(e.source, e.target, e.type, e.properties)
 end
-function EdgePattern(type::String; kwargs...)
+function EdgePattern(type::AbstractString; kwargs...)
     EdgePattern(nothing, nothing, type, Config(kwargs))
 end
 function EdgePattern(source::Integer, target::Integer; kwargs...)
@@ -183,26 +184,6 @@ function Base.show(io::IO, e::EdgePattern)
 end
 
 """
-    EdgeReference
-
-A reference to edges in a property graph. Nodes will store these 
-references to edges for fast traversal.
-"""
-@kwdef struct EdgeReference
-    in_edges::Vector{Edge} = Edge[]
-    out_edges::Vector{Edge} = Edge[]
-end
-
-function EdgeReference(in_edges::Vector{<:Edge}, out_edges::Vector{<:Edge})
-    EdgeReference(in_edges, out_edges)
-end
-
-function Base.:(==)(a::EdgeReference, b::EdgeReference)
-    return a.in_edges == b.in_edges && a.out_edges == b.out_edges
-end
-
-
-"""
     Node(id::UInt, labels::Vector{String}, properties::Config) <: AbstractNodeLike
 
 Represents a node in the property graph. 
@@ -213,7 +194,7 @@ Represents a node in the property graph.
 - `properties::Config`: A `Config` object representing the properties (key-value pairs) associated with the node.
 
 # Constructors
-- `Node(id::UInt, labels::String...; props...)`: Convenience constructor to create a `Node` with the given `id`, one or more `labels`, and optional `props` which are passed to the `Config` constructor.
+- `Node(id::UInt, labels::AbstractString...; props...)`: Convenience constructor to create a `Node` with the given `id`, one or more `labels`, and optional `props` which are passed to the `Config` constructor.
 
 # Examples
 
@@ -225,9 +206,6 @@ struct Node <: AbstractNodeLike
     id::ID
     labels::Vector{String}
     properties::Config
-
-    # Store edge locations
-    edge_references::EdgeReference
 end
 
 function Base.show(io::IO, n::Node)
@@ -237,25 +215,22 @@ end
 Node(id::Integer, args...; kwargs...) = Node(toid(id), args...; kwargs...)
 function Node(
     id::CASTABLE_TO_ID,
-    labels::String...;
-    edge_references::EdgeReference=EdgeReference(),
+    labels::AbstractString...;
     props...
 )
-    Node(toid(id), collect(labels), Config(props), edge_references)
+    Node(toid(id), collect(labels), Config(props))
 end
 function Node(
     id::CASTABLE_TO_ID,
     labels::Vector{String};
-    edge_references::EdgeReference=EdgeReference(),
     props...
 )
-    Node(toid(id), labels, Config(props), edge_references)
+    Node(toid(id), labels, Config(props))
 end
 
 id(n::Node) = n.id
 labels(n::Node) = n.labels
 properties(n::Node) = n.properties
-edge_references(n::Node) = n.edge_references
 
 function Base.:(==)(a::Node, b::Node)
     return a.id == b.id &&
@@ -263,13 +238,13 @@ function Base.:(==)(a::Node, b::Node)
            a.properties == b.properties
 end
 
-Base.getindex(n::Node, key::String) = getindex(n.properties, key)
-function Base.setindex!(n::Node, value, key::String)
+Base.getindex(n::Node, key::AbstractString) = getindex(n.properties, key)
+function Base.setindex!(n::Node, value, key::AbstractString)
     setindex!(n.properties, value, key)
 end
 
 # Utility functions for constructing an edge from two nodes
-function Edge(source::Node, target::Node, type::String; kwargs...)
+function Edge(source::Node, target::Node, type::AbstractString; kwargs...)
     Edge(id(source), id(target), type; kwargs...)
 end
 
@@ -306,46 +281,30 @@ struct NodePattern{IDType<:AbstractID} <: AbstractNodeLike
     id::IDType
     labels::Vector{String}
     properties::Config
-    edge_references::EdgeReference
 
-    function NodePattern(id, labels, props, refs)
-        newid = toid(id)
-        new{typeof(newid)}(newid, labels, props, refs)
+    function NodePattern(id::AbstractID, labels::Vector{String}, props::Config)
+        new{typeof(id)}(id, labels, props)
     end
 end
 
-NodePattern(n::Node) = NodePattern(n.id, n.labels, n.properties, n.edge_references)
+NodePattern() = NodePattern(NoID(), String[], Config())
+NodePattern(n::Node) = NodePattern(n.id, n.labels, n.properties)
+NodePattern(id::CASTABLE_TO_ID) = NodePattern(toid(id), String[], Config())
+NodePattern(labels::AbstractString...; kwargs...) = NodePattern(NoID(), collect(labels), Config(kwargs))
+NodePattern(labels::Vector{String}; kwargs...) = NodePattern(NoID(), labels, Config(kwargs))
 
-function NodePattern(
-    labels::String...;
-    edge_references::EdgeReference=EdgeReference(),
+function EdgePattern(
+    source::AbstractNodeLike,
+    target::AbstractNodeLike,
+    type::Union{AbstractString,Nothing}=nothing;
     kwargs...
 )
-    NodePattern(NoID(), collect(labels), Config(kwargs), edge_references)
+    EdgePattern(id(source), id(target), type, Config(kwargs))
 end
-function NodePattern(
-    labels;
-    edge_references::EdgeReference=EdgeReference(),
-    kwargs...
-)
-    label_vec = isempty(labels) ? String[] : labels
-    NodePattern(NoID(), label_vec, Config(kwargs), edge_references)
-end
-function NodePattern(id, args...; kwargs...)
-    NodePattern(toid(id), args...; kwargs...)
-end
-function NodePattern(id, labels::String...; edge_references::EdgeReference=EdgeReference(), props...)
-    NodePattern(id, collect(labels), Config(props), edge_references)
-end
-function NodePattern(id, labels::Vector{String}; edge_references::EdgeReference=EdgeReference(), props...)
-    NodePattern(id, labels, Config(props), edge_references)
-end
-
 
 id(n::NodePattern) = n.id
 labels(n::NodePattern) = n.labels
 properties(n::NodePattern) = n.properties
-edge_references(n::NodePattern) = n.edge_references
 
 propertymatch(c1::AbstractPattern, c2::AbstractPattern) = propertymatch(properties(c1), properties(c2))
 propertymatch(c1::AbstractPattern, c2::Config) = propertymatch(properties(c1), c2)
@@ -401,6 +360,8 @@ matchequal(thing::Union{NoID,Nothing}, other::Union{NoID,Nothing}) = true
 matchequal(thing::Union{NoID,Nothing}, other) = true
 matchequal(thing, other::Union{NoID,Nothing}) = true
 
+sourcematch(subedge::AbstractEdgeLike, node::AbstractID) = matchequal(source(subedge), node)
+sourcematch(subedge::AbstractEdgeLike, node::AbstractNodeLike) = matchequal(source(subedge), id(node))
 sourcematch(subedge::AbstractEdgeLike, edge::AbstractEdgeLike) = matchequal(source(subedge), source(edge))
 targetmatch(subedge::AbstractEdgeLike, edge::AbstractEdgeLike) = matchequal(target(subedge), target(edge))
 typematch(subedge::AbstractEdgeLike, edge::AbstractEdgeLike) = matchequal(type(subedge), type(edge))
@@ -429,21 +390,65 @@ matches(s::AbstractNodeLike, n::AbstractNodeLike) = id(s) == id(n) && _matches(s
 
 matches(e1::AbstractEdgeLike, e2::AbstractEdgeLike) = _matches(e1, e2)
 
+"""
+    AbstractIndex
+
+A super type for all index types. Indices may be constructed on various features, 
+but they must index on only one feature:
+
+- `NodeLabelIndex` for node labels
+- `EdgeTypeIndex` for edge types
+- `NodePropertyIndex` for node properties
+- `EdgePropertyIndex` for edge properties
+"""
+abstract type AbstractIndex end
+
+struct NodeLabelIndex{K} <: AbstractIndex
+    index_key::K
+end
+
+struct EdgeTypeIndex{K} <: AbstractIndex
+    index_key::K
+end
+
+struct NodePropertyIndex{K} <: AbstractIndex
+    index_key::K
+end
+
+struct EdgePropertyIndex{K} <: AbstractIndex
+    index_key::K
+end
+
+"""
+    Index
+
+The index is a helper type to provide a simple mapping pairs of nodes to each other through edges.
+
+Index makes it possible to do fast lookups of nodes and edges by ID.
+"""
+mutable struct Index{IndexType<:AbstractIndex}
+    key::IndexType
+    nodes::Dict{ID,Node}
+    edges::Dict{Tuple{ID,ID},Edge}
+end
+
 mutable struct PropertyGraph
     metadata::Config
     nodes::Vector{Node}
     edges::Vector{Edge}
+    indices::Vector{Index}
 end
 
-PropertyGraph(nodes::Vector{Node}, edges::Vector{Edge}; metadata::Config=Config()) = PropertyGraph(metadata, nodes, edges)
-PropertyGraph(; metadata::Config=Config(), nodes::Vector{Node}=Node[], edges::Vector{Edge}=Edge[]) = PropertyGraph(metadata, nodes, edges)
-PropertyGraph(nodes::Vector{Node}; metadata::Config=Config(), edges::Vector{Edge}=Edge[]) = PropertyGraph(metadata, nodes, edges)
-PropertyGraph(edges::Vector{Edge}; metadata::Config=Config(), nodes::Vector{Node}=Node[]) = PropertyGraph(metadata, nodes, edges)
+PropertyGraph(nodes::Vector{Node}, edges::Vector{Edge}; metadata::Config=Config(), index=Index[]) = PropertyGraph(metadata, nodes, edges, index)
+PropertyGraph(; metadata::Config=Config(), nodes::Vector{Node}=Node[], edges::Vector{Edge}=Edge[], index=Index[]) = PropertyGraph(metadata, nodes, edges, index)
+PropertyGraph(nodes::Vector{Node}; metadata::Config=Config(), edges::Vector{Edge}=Edge[], index=Index[]) = PropertyGraph(metadata, nodes, edges, index)
+PropertyGraph(edges::Vector{Edge}; metadata::Config=Config(), nodes::Vector{Node}=Node[], index=Index[]) = PropertyGraph(metadata, nodes, edges, index)
 
 Base.:(==)(a::PropertyGraph, b::PropertyGraph) = a.metadata == b.metadata && a.nodes == b.nodes && a.edges == b.edges
-Base.intersect(a::PropertyGraph, b::PropertyGraph) = PropertyGraph(intersect(a.nodes, b.nodes), intersect(a.edges, b.edges); metadata=a.metadata)
+Base.intersect(a::PropertyGraph, b::PropertyGraph) = PropertyGraph(intersect(a.nodes, b.nodes), intersect(a.edges, b.edges); metadata=Config(intersect(a.metadata, b.metadata)))
+Base.union(a::PropertyGraph, b::PropertyGraph) = PropertyGraph(union(a.nodes, b.nodes), union(a.edges, b.edges); metadata=Config(union(a.metadata, b.metadata)))
 
-Base.show(io::IO, g::PropertyGraph) = print(io, "PropertyGraph($(length(g.nodes)) nodes, $(length(edges(g))) edges)")
+# Base.show(io::IO, g::PropertyGraph) = print(io, "PropertyGraph($(n_nodes(g)) nodes, $(n_edges(g)) edges)")
 
 # Load error types
 include("errors.jl")
@@ -454,7 +459,7 @@ include("errors.jl")
 Get the next available ID for a node in the graph, this is simply
 the length of the graph's nodes plus one.
 """
-valid_id(g::PropertyGraph) = toid(length(g.nodes) + 1)
+valid_id(g::PropertyGraph) = toid(n_nodes(g) + 1)
 
 """
     is_valid_id(g::PropertyGraph, id::AbstractID)
@@ -531,7 +536,7 @@ function has_edge(
     g::PropertyGraph,
     source::AbstractID,
     target::AbstractID,
-    type::String
+    type::AbstractString
 )
     return length(match(g, Edge(source, target, type))) > 0
 end
@@ -546,38 +551,15 @@ metadata(g::PropertyGraph) = g.metadata
 Base.getindex(g::PropertyGraph, id::AbstractID) = getindex(g.nodes, value(id))
 Base.getindex(g::PropertyGraph, id::Integer) = getindex(g, toid(id))
 
-"""
-    update_edge_references(g::PropertyGraph)
-
-Refreshes the edge references for all nodes in the graph.
-"""
-function update_edge_references(g::PropertyGraph)
-    # TODO: Edge references should be updated as nodes and edges are inserted
-    for i in eachindex(g.nodes)
-        n = g.nodes[i]
-        in_edges = Edge[]
-        out_edges = Edge[]
-        for e in edges(g)
-            if e.source == n.id
-                push!(in_edges, e)
-            end
-            if e.target == n.id
-                push!(out_edges, e)
-            end
-        end
-
-        # Recreate the node with the updated edge references
-        new_node = Node(n.id, n.labels, n.properties, EdgeReference(in_edges, out_edges))
-        g.nodes[i] = new_node
-    end
-end
+Base.getindex(g::PropertyGraph, id1::AbstractID, id2::AbstractID) = getindex(g.edges, value(id1), value(id2))
+Base.getindex(g::PropertyGraph, id1::Integer, id2::Integer) = getindex(g, toid(id1), toid(id2))
 
 """
     Base.match(g::PropertyGraph, patterns::AbstractPattern...)
 
 Match the pattern to the graph.
 """
-function Base.match(g::PropertyGraph, patterns::AbstractPattern...)
+function Base.match(g::PropertyGraph, patterns::AbstractPattern...; remap_ids::Bool=false)
     # Get node patterns and edge patterns
     node_patterns = filter(p -> p isa AbstractNodeLike, patterns)
     edge_patterns = filter(p -> p isa AbstractEdgeLike, patterns)
@@ -600,8 +582,101 @@ function Base.match(g::PropertyGraph, patterns::AbstractPattern...)
     # Reduce the list of edges to a single list and remove duplicates
     es = length(es) > 0 ? unique(reduce(vcat, es)) : Edge[]
 
-    return PropertyGraph(nds, es, metadata=metadata(g))
+    return remap_ids ?
+           remap_id(PropertyGraph(nds, es, metadata=metadata(g))) :
+           PropertyGraph(nds, es, metadata=metadata(g))
 end
+
+"""
+    Base.match(g::PropertyGraph, query::Pair{NodePattern, NodePattern})
+
+Create a subgraph containing all the nodes that match the left and right 
+patterns, as well as all the edges that match the left and right patterns.
+"""
+function Base.match(g::PropertyGraph, query::Pair{<:AbstractNodeLike,<:AbstractNodeLike}; remap_ids::Bool=false)
+    # Find all edges that connect the pair
+    connections = edges(match(g, EdgePattern(query[1], query[2])))
+
+    # Grab all nodes associated with each edge
+    node_ids = unique(
+        reduce(vcat,
+            map(e -> [e.source, e.target], connections)
+        )
+    )
+
+    # Get the nodes from the graph
+    nodes = map(id -> g[id], node_ids)
+
+    # Create a new subgraph with the nodes and edges
+    return remap_ids ?
+           remap_id(PropertyGraph(nodes, connections, metadata=metadata(g))) :
+           PropertyGraph(nodes, connections, metadata=metadata(g))
+end
+
+function Base.match(
+    g::PropertyGraph,
+    query::Pair{A,Pair{B,C}};
+    remap_ids::Bool=false
+) where {A<:AbstractNodeLike,B<:Union{Symbol,AbstractString},C<:AbstractNodeLike}
+    # Source, relation, target
+    source, (relation, target) = query
+
+    # Find all edges that connect the pair
+    connections = edges(match(g, EdgePattern(source, target, String(relation))))
+
+    # Grab all nodes associated with each edge
+    node_ids = unique(
+        reduce(vcat,
+            map(e -> [e.source, e.target], connections)
+        )
+    )
+
+    # Get the nodes from the graph
+    nodes = map(id -> g[id], node_ids)
+
+    # Create a new subgraph with the nodes and edges
+    return remap_ids ?
+           remap_id(PropertyGraph(nodes, connections, metadata=metadata(g))) :
+           PropertyGraph(nodes, connections, metadata=metadata(g))
+end
+
+connections_between(g::PropertyGraph, n1::AbstractNodeLike, n2::AbstractNodeLike) = connections_between(g, id(n1), id(n2))
+function connections_between(g::PropertyGraph, n1::AbstractID, n2::AbstractID)
+    # Get all the edges that connect n1 to n2
+    return filter(e -> sourcematch(e, n1) || sourcematch(e, n2), edges(g))
+end
+
+
+function neighbors(g::PropertyGraph, id::ID)
+    # 
+end
+
+"""
+    remap_id(g::PropertyGraph)
+
+Makes all IDs monotone.
+"""
+function remap_id(g::PropertyGraph)
+    # Get all IDs
+    node_ids = map(id, nodes(g))
+    source_ids = map(source, edges(g))
+    target_ids = map(target, edges(g))
+    new_node_ids = 1:n_nodes(g)
+
+    # Construct a mapping from old to new
+    id_mapping = Dict(zip(node_ids, new_node_ids))
+    source_mapping = Dict(source_id => id_mapping[source_id] for source_id in source_ids)
+    target_mapping = Dict(target_id => id_mapping[target_id] for target_id in target_ids)
+
+    # Construct the new nodes
+    new_nodes = map(n -> Node(id_mapping[id(n)], labels(n), properties(n)), nodes(g))
+    new_edges = map(e -> Edge(source_mapping[source(e)], target_mapping[target(e)], type(e), properties(e)), edges(g))
+
+    # Construct the new graph
+    return PropertyGraph(new_nodes, new_edges, metadata=metadata(g))
+end
+
+
 
 """
     save(n::Node)
@@ -612,9 +687,6 @@ struct Node <: AbstractNodeLike
     id::ID
     labels::Vector{String}
     properties::Config
-
-    # Store edge locations
-    edge_references::EdgeReference
 end
 
 Node records have the following specification:
@@ -633,6 +705,7 @@ Node records have the following specification:
 """
 
 end # module PropertyGraphs
+
 
 
 

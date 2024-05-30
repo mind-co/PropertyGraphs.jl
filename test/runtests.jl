@@ -82,28 +82,6 @@ end
         @test Edge(john, jane, "friend of"; since=2010) == Edge(1, 2, "friend of"; since=2010)
     end
 
-    @testset "EdgeReference" begin
-        @info "Testing EdgeReference"
-
-        edge = Edge(1, 2, "friend of"; since=2010)
-
-        edge_references = EdgeReference(Edge[], Edge[])
-        @test edge_references.in_edges == Edge[]
-        @test edge_references.out_edges == Edge[]
-
-        # Test equivalence
-        @test edge_references == EdgeReference(Edge[], Edge[])
-        @test edge_references == EdgeReference(in_edges=Edge[], out_edges=Edge[])
-
-        # Test with values
-        edge_references = EdgeReference(Edge[edge, edge], Edge[edge, edge])
-        @test edge_references.in_edges == Edge[edge, edge]
-        @test edge_references.out_edges == Edge[edge, edge]
-
-        # Test equivalence
-        @test edge_references == EdgeReference(in_edges=Edge[edge, edge], out_edges=Edge[edge, edge])
-    end
-
     @testset "PropertyGraph" begin
         @info "Testing PropertyGraph"
 
@@ -126,11 +104,26 @@ end
         graph = PropertyGraph(Node[john, jane], Edge[john_jane, jane_john])
         @test graph.nodes == Node[john, jane]
         @test graph.edges == Edge[john_jane, jane_john]
+    end
 
-        # Refresh edge references
-        update_edge_references(graph)
-        @test graph.nodes[1].edge_references == EdgeReference(Edge[john_jane], Edge[jane_john])
-        @test graph.nodes[2].edge_references == EdgeReference(Edge[jane_john], Edge[john_jane])
+    @testset "Remapping" begin
+        @info "Testing remapping"
+
+        nonsequential_node_a = Node(1000000)
+        nonsequential_node_b = Node(1000001)
+        nonsequential_edge = Edge(1000000, 1000001, "friend of"; since=2010)
+
+        corrected_a = Node(1)
+        corrected_b = Node(2)
+        corrected_edge = Edge(1, 2, "friend of"; since=2010)
+
+        g = PropertyGraph(Node[nonsequential_node_a, nonsequential_node_b], Edge[nonsequential_edge])
+        remapped_g = remap_id(g)
+        corrected_g = PropertyGraph(Node[corrected_a, corrected_b], Edge[corrected_edge])
+
+        @test nodes(remapped_g) == nodes(corrected_g)
+        @test edges(remapped_g) == edges(corrected_g)
+        @test remapped_g == corrected_g
     end
 
     @testset "match" begin
@@ -173,6 +166,51 @@ end
                 EdgePattern(2, 1),
             ).edges == Edge[john_jane, husband, jane_john, wife]
         end
+
+        @testset "Node pair match" begin
+            @info "Testing Node pair match"
+
+            alice = Node(1, "person", "human"; name="Alice Doe", age=27)
+            bob = Node(2, "person", "human"; name="Bob Doe", age=28)
+            charlie = Node(3, "person", "human"; name="Charlie Doe", age=29)
+            doug = Node(4, "dog", "pet"; name="Doug", breed="Labrador", age=3)
+            eve = Node(5, "cat", "pet"; name="Eve", breed="Persian", age=2)
+
+            alice_bob = Edge(1, 2, "friend of"; since=2012)
+            bob_alice = Edge(2, 1, "friend of"; since=2013)
+            alice_doug = Edge(1, 4, "pet of"; since=2014)
+            bob_eve = Edge(2, 5, "pet of"; since=2015)
+            doug_eve = Edge(4, 5, "best friend of"; since=2016)
+            doug_eve_2 = Edge(4, 5, "toy stealer of"; since=2017)
+            eve_doug = Edge(5, 4, "mortal enemy of"; since=2017)
+
+            nds = Node[alice, bob, charlie, doug, eve]
+            edg = Edge[alice_bob, bob_alice, alice_doug, bob_eve, doug_eve, eve_doug, doug_eve_2]
+
+            graph = PropertyGraph(nds, edg)
+
+            gab = (remap_id ∘ PropertyGraph)(Node[alice, bob], Edge[alice_bob])
+            gad = (remap_id ∘ PropertyGraph)(Node[alice, doug], Edge[alice_doug])
+            gbe = (remap_id ∘ PropertyGraph)(Node[bob, eve], Edge[bob_eve])
+            gde = (remap_id ∘ PropertyGraph)(Node[doug, eve], Edge[doug_eve, doug_eve_2])
+
+            # Test matching a single node pair
+            @test (remap_id ∘ match)(graph, alice => bob) == (remap_id ∘ PropertyGraph)(Node[alice, bob], Edge[alice_bob])
+            @test (remap_id ∘ match)(graph, alice => doug) == (remap_id ∘ PropertyGraph)(Node[alice, doug], Edge[alice_doug])
+            @test (remap_id ∘ match)(graph, bob => eve) == (remap_id ∘ PropertyGraph)(Node[bob, eve], Edge[bob_eve])
+            @test (remap_id ∘ match)(graph, doug => eve) == (remap_id ∘ PropertyGraph)(Node[doug, eve], Edge[doug_eve, doug_eve_2])
+
+            # Test matching by connection type
+            @test match(graph, NodePattern() => "friend of" => NodePattern(), remap_ids=true) == remap_id(PropertyGraph(Node[alice, bob], Edge[alice_bob, bob_alice]))
+            @test match(
+                graph,
+                NodePattern() => "pet of" => NodePattern(),
+                remap_ids=true
+            ) == remap_id(PropertyGraph(
+                Node[alice, doug, bob, eve],
+                Edge[alice_doug, bob_eve]
+            ))
+        end
     end
 
     @testset "intersect" begin
@@ -185,6 +223,22 @@ end
 
         graph = PropertyGraph(Node[john, jane], Edge[john_jane, jane_john])
         @test intersect(graph, PropertyGraph(Node[john], Edge[])) == PropertyGraph(Node[john], Edge[])
+    end
+
+    @testset "union" begin
+        @info "Testing union"
+
+        alice = Node(1, "person", "human"; name="Alice Doe", age=27)
+        bob = Node(2, "person", "human"; name="Bob Doe", age=28)
+        charlie = Node(3, "person", "human"; name="Charlie Doe", age=29)
+        alice_bob = Edge(1, 2, "friend of"; since=2012)
+        bob_alice = Edge(2, 1, "friend of"; since=2013)
+        charlie_alice = Edge(3, 1, "friend of"; since=2014)
+
+        g1 = PropertyGraph(Node[alice, bob], Edge[alice_bob, bob_alice])
+        g2 = PropertyGraph(Node[charlie], Edge[charlie_alice])
+
+        @test union(g1, g2) == PropertyGraph(Node[alice, bob, charlie], Edge[alice_bob, bob_alice, charlie_alice])
     end
 
     @testset "push!" begin
