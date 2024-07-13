@@ -1,5 +1,32 @@
 # PropertyGraphs.jl Documentation
 
+## Motivation
+
+Property graphs are a powerful data structure for representing complex relationships and attributes in various domains, including social networks, knowledge graphs, and biological systems. This package aims to provide an intuitive and efficient implementation of property graphs in Julia.
+
+## Features
+
+- Create nodes with labels and properties
+- Create edges with types and properties
+- Build and manipulate property graphs
+- Query graphs using pattern matching
+- Perform graph operations like union and intersection
+
+## Installation
+
+You can install PropertyGraphs.jl using Julia's package manager. Currently, the package is not registered, so you will need to pull from the GitHub repository.
+
+```julia
+using Pkg
+Pkg.add(url="https://github.com/mind-co/PropertyGraphs.jl")
+```
+
+When the package is registered (who knows when that will be), PropertyGraphs.jl can be installed with
+
+```julia
+using Pkg
+Pkg.add("PropertyGraphs")
+```
 
 ## Overview
 
