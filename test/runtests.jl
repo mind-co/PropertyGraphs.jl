@@ -1,5 +1,6 @@
 using Test
 using PropertyGraphs
+using Aqua
 
 macro no_testset(name, expr)
     quote
@@ -13,6 +14,11 @@ end
 @info "Let's goooooooooooooooooooo make sure this code works"
 
 @testset "PropertyGraphs" begin
+
+    @info "Aqua" begin
+        Aqua.test_all(PropertyGraphs)
+    end
+
 
     john = Node(1, "person", "human"; name="John Doe", age=25)
     jane = Node(2, "person", "human"; name="Jane Doe", age=26)
