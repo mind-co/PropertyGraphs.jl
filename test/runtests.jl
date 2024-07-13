@@ -1,5 +1,4 @@
 using Test
-using Revise
 using PropertyGraphs
 
 macro no_testset(name, expr)
