@@ -433,20 +433,20 @@ mutable struct Index{IndexType<:AbstractIndex}
 end
 
 mutable struct PropertyGraph
-    metadata::Config
+    metadata::Dict # TODO make this less shitty, no Dict any
     nodes::Vector{Node}
     edges::Vector{Edge}
     indices::Vector{Index}
 end
 
-PropertyGraph(nodes::Vector{Node}, edges::Vector{Edge}; metadata::Config=Config(), index=Index[]) = PropertyGraph(metadata, nodes, edges, index)
-PropertyGraph(; metadata::Config=Config(), nodes::Vector{Node}=Node[], edges::Vector{Edge}=Edge[], index=Index[]) = PropertyGraph(metadata, nodes, edges, index)
-PropertyGraph(nodes::Vector{Node}; metadata::Config=Config(), edges::Vector{Edge}=Edge[], index=Index[]) = PropertyGraph(metadata, nodes, edges, index)
-PropertyGraph(edges::Vector{Edge}; metadata::Config=Config(), nodes::Vector{Node}=Node[], index=Index[]) = PropertyGraph(metadata, nodes, edges, index)
+PropertyGraph(nodes::Vector{Node}, edges::Vector{Edge}; metadata::Dict=Dict(), index=Index[]) = PropertyGraph(metadata, nodes, edges, index)
+PropertyGraph(; metadata::Dict=Dict(), nodes::Vector{Node}=Node[], edges::Vector{Edge}=Edge[], index=Index[]) = PropertyGraph(metadata, nodes, edges, index)
+PropertyGraph(nodes::Vector{Node}; metadata::Dict=Dict(), edges::Vector{Edge}=Edge[], index=Index[]) = PropertyGraph(metadata, nodes, edges, index)
+PropertyGraph(edges::Vector{Edge}; metadata::Dict=Dict(), nodes::Vector{Node}=Node[], index=Index[]) = PropertyGraph(metadata, nodes, edges, index)
 
 Base.:(==)(a::PropertyGraph, b::PropertyGraph) = a.metadata == b.metadata && a.nodes == b.nodes && a.edges == b.edges
-Base.intersect(a::PropertyGraph, b::PropertyGraph) = PropertyGraph(intersect(a.nodes, b.nodes), intersect(a.edges, b.edges); metadata=Config(intersect(a.metadata, b.metadata)))
-Base.union(a::PropertyGraph, b::PropertyGraph) = PropertyGraph(union(a.nodes, b.nodes), union(a.edges, b.edges); metadata=Config(union(a.metadata, b.metadata)))
+Base.intersect(a::PropertyGraph, b::PropertyGraph) = PropertyGraph(intersect(a.nodes, b.nodes), intersect(a.edges, b.edges); metadata=Dict(intersect(a.metadata, b.metadata)))
+Base.union(a::PropertyGraph, b::PropertyGraph) = PropertyGraph(union(a.nodes, b.nodes), union(a.edges, b.edges); metadata=Dict(union(a.metadata, b.metadata)))
 
 # Base.show(io::IO, g::PropertyGraph) = print(io, "PropertyGraph($(n_nodes(g)) nodes, $(n_edges(g)) edges)")
 
