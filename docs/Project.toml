@@ -1,2 +1,3 @@
 [deps]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+PropertyGraphs = "8e776571-0c84-4d8d-842c-0d284f11a20a"

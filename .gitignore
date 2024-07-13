@@ -1,3 +1,4 @@
 .vscode/settings.json
 *.bin
 Manifest.toml
+docs/build/
