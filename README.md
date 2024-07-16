@@ -18,14 +18,7 @@ Property graphs are a powerful data structure for representing complex relations
 
 ## Installation
 
-You can install PropertyGraphs.jl using Julia's package manager. Currently, the package is not registered, so you will need to pull from the GitHub repository.
-
-```julia
-using Pkg
-Pkg.add(url="https://github.com/mind-co/PropertyGraphs.jl")
-```
-
-When the package is registered (who knows when that will be), PropertyGraphs.jl can be installed with
+You can install PropertyGraphs.jl with Pkg:
 
 ```julia
 using Pkg
